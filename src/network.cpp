@@ -1,5 +1,6 @@
 #include "network.h"
 #include "random.h"
+ 
 
 void Network::resize(const size_t &n, double inhib) {
     size_t old = size();
@@ -61,6 +62,86 @@ size_t Network::random_connect(const double &mean_deg, const double &mean_streng
     }
     return num_links;
 }
+
+
+std::vector<std::pair<size_t, double> > Network::neighbors(const size_t& n) const{
+
+  std::vector<std::pair<size_t, double> > neighbours;	  
+  std::map<std::pair<size_t, size_t>,double>::const_iterator bot_it, top_it;
+  
+  bot_it = links.lower_bound(std::make_pair(n,0));
+  top_it = links.end();
+ 
+  for (; bot_it != top_it and (bot_it->first.first)==n ; ++bot_it){
+		neighbours.push_back(std::make_pair(bot_it->first.second, bot_it->second));
+	  }
+  
+  return neighbours;
+}
+
+std::pair<size_t, double> Network::degree(const size_t& n) const{
+
+	std::vector<std::pair<size_t, double> > connections(neighbors(n));
+	double I(0);
+	std::pair<size_t, double> degree = {0,0};
+	
+	for(size_t i(0); i<connections.size(); ++i){
+		
+			I+=connections[i].second;
+	}
+	
+	degree.first = connections.size();
+	degree.second = I;
+	
+	return degree;
+
+}
+
+
+std::set<size_t> Network::step(const std::vector<double>& thalamic){
+	std::set<size_t> list_firing;	
+	double w = 1, I_ex(0), I_inhib(0), Intensity(0);
+
+	for(size_t i(0); i<neurons.size(); ++i){
+
+		if(neurons[i].is_inhibitory())
+			w=0.4;
+		else
+			w=1;
+
+		std::vector<std::pair<size_t, double> > connections(neighbors(i));
+		
+		for(auto connect : connections){
+		
+			if(neurons[connect.first].firing()){
+				if(neurons[connect.first].is_inhibitory())
+					I_inhib+= connect.second;
+				else
+					I_ex += connect.second;
+			}
+		}	
+		
+		Intensity = w*thalamic[i] + 0.5*I_ex + I_inhib;
+		neurons[i].input(Intensity);
+		I_inhib=0;
+		I_ex=0;
+	}
+
+
+	for(size_t i(0); i<neurons.size(); ++i){
+		
+		if(neurons[i].firing()){
+			neurons[i].reset();
+			list_firing.insert(i);
+			}
+		else
+			neurons[i].step();
+	}	
+
+	return list_firing;
+
+}
+
 
 std::vector<double> Network::potentials() const {
     std::vector<double> vals;
